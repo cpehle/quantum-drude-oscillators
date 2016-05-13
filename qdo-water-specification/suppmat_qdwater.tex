@@ -1,0 +1,119 @@
+%==============================================================================
+%cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+%==============================================================================
+\documentclass[aps,prb,amsmath,preprint,showpacs,letterpaper]{revtex4}
+
+\usepackage{graphicx}
+\usepackage{times}
+\usepackage{subfigure}
+\usepackage{asymptote}
+\usepackage{dcolumn}         %- Align table columns on decimal point
+\usepackage{longtable}
+\usepackage{multirow}
+
+\newcommand{\grad}{\nabla}
+\newcommand{\tdot}{\!\cdot\!}
+\newcommand{\bra}[1]{\langle #1|}
+\newcommand{\ket}[1]{|#1\rangle}
+\newcommand{\braket}[2]{\langle #1|#2\rangle}
+\newcommand{\calR}{{\cal R}}
+\newcommand{\calY}{{\cal Y}}
+\newcommand{\calC}{{\cal C}}
+\newcommand{\where}{\text{where}\quad}
+\newcommand{\order}[1]{\mathcal{O}\left(#1\right)}
+\newcommand{\kA}{{ k_\text{A} }}
+\newcommand{\kB}{{ k_\text{B} }}
+\newcommand{\lA}{{ l_\text{A} }}
+\newcommand{\lB}{{ l_\text{B} }}
+\newcommand{\mA}{{ m_\text{A} }}
+\newcommand{\mB}{{ m_\text{B} }}
+\newcommand{\bi}{{\mathbf{i}}}
+\newcommand{\omegaA}{{ \omega_\text{A} }}
+\newcommand{\omegaB}{{ \omega_\text{B} }}
+\newcommand{\ten}[1]{$\times\!10^#1$}
+\newcommand{\myto}{$\!$-}
+\newcommand{\br}{{\bf r}}
+
+\newcommand{\erf}{\mathrm{erf}\,}
+\newcommand{\erfc}{\mathrm{erfc}\,}
+
+\newcommand{\specialcell}[2][c]{%
+  \begin{tabular}[#1]{@{}c@{}}#2\end{tabular}}
+
+%\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+
+
+
+%==============================================================================
+\begin{document}
+\title{Supplementary Material}
+
+
+
+
+\clearpage
+%==============================================================================
+\section{Detailed Model Potential}
+
+\begin{table}[!ht]
+\caption{Detailed Model Parameters}
+\begin{tabular}{ccc}
+  Symbol & Value & Source / Description  \\ \hline
+  $R_{\text{OH}}$ & 0.9572\AA & \multirow{2}{*}{Gas-phase geometry} \\
+  $\widehat{\text{HOH}}$ & 104.52$^\circ$   \\ \hline
+  q_{\text{H}} & 0.605 e & \multirow{2}{*}{Gas-phase charge moments} \\
+  $R_{\text{OM}}$ & 0.2667\AA  \\ \hline
+  $\omega$ & 0.6287 $E_h$/$\hbar$& \multirow{3}{*}{\specialcell{Gas-phase polarization and \\dispersion responses}} \\
+  m & 0.3656 $m_e$\\
+  q_d & -1.1973 e\\ \hline
+  $\sigma_d$ & 0.1 a_0 & \multirow{4}{*}{\specialcell{Gaussian charge widths for drudon,\\tether-point (center), H-atom and M-site\\- damp Coulomb force at short range }} \\
+  $\sigma_c$ & 1.2 a_0 \\
+  $\sigma_\text{H}$ & 0.1 a_0 \\
+  $\sigma_\text{M}$ & 0.1 a_0 \\ \hline
+  $\kappa_1$ & 2.5 $E_h$ &\multirow{4}{*}{O-O repulsion parameters} \\
+  $\lambda_1$ & 1.171802 $a_0^{-1}$ \\
+  $\kappa_2$ & 6000 $E_h$ \\
+  $\lambda_2$ & 2.820276 $a_0^{-1}$ \\
+\end{tabular}
+\end{table}
+
+\clearpage
+%------------------------------------------------------------------------------
+\subsection{Coulomb potential with Gaussian charge width}
+
+For a Gaussian distribution with width $\sigma$, the enclosed volume as a function
+of radius is the error function:
+\begin{eqnarray*}
+  \rho(r) &=& q \tfrac{1}{\sqrt{2\pi}\sigma} \exp\left(-\tfrac{r^2}{2\sigma^2}\right), \\
+  \grad^2\phi &=& \rho \implies \\
+  \phi(r) &=& \frac{q\:\text{erf}(r/\sqrt{2}\,\sigma)}{r}. \\
+\end{eqnarray*}
+
+For two Gaussian distributions interacting, we can use the fact that variances
+of independent variables add: 
+\begin{eqnarray*}
+  \sigma_{12}^2 &\to& \sigma_1^2 + \sigma_2^2, \\
+  \phi(r) &=& \frac{q_1 q_2 \: \text{erf}(r/\sqrt{2}\,\sigma_{12})}{r}. 
+\end{eqnarray*}
+
+%------------------------------------------------------------------------------
+\subsection{Exponential repulsive potential}
+
+This model adds a repulsion potential between the O-atoms, 
+with two exponential terms:
+\begin{eqnarray*}
+  \phi(r) &=& \kappa_1\exp(-\lambda_1 r) + \kappa_2\exp(-\lambda_2 r).
+\end{eqnarray*}
+Note that $\kappa_i$ and $\lambda_i$ are not related to the dispersion scaling
+parameter $\kappa$ nor the polarizability scaling parameter $\lambda$
+mentioned in the text.
+
+
+%\clearpage
+%===============================================================================
+%\bibliography{suppmat}
+
+%-------------------------------------------------------------------------------
+\end{document}
+%===============================================================================
+
