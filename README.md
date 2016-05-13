@@ -37,7 +37,7 @@ the point where we can compute energies of dimers (2 water molecules),
 and possibly up to 20-mers. With that, we can compare results to our
 high-accuracy CCSD(T) quantum calculations and make the call on
 whether to pursue this model further or not. The next step would be
-parameterize a simple organic molecule like methane and compute
+parameterize a simple organic molecule like methane, compute
 heterodimer energies (water-methane dimers) and compare those to
 high-level QM calculations.
  
@@ -64,13 +64,14 @@ our forcefield effort.
 I have already (1 weekend and 6 evenings) written basic numpy code to
 do DMC sampling of the QDO water model. My preliminary results are
 promising (compare well to MP2) but too far from convergence to make a
-solid case. A smart intern under my guidance could implement VMC,
-implement importance-sampling DMC, implement a basic CUDA version of
-DMC (2-5x speedup), compute results for QDO water clusters, and
-parameterize methane.
+solid case. Interns under my guidance could implement VMC, implement
+importance-sampling DMC, implement a basic CUDA version of DMC (2-5x
+speedup), compute results for QDO water clusters, and parameterize
+methane.
  
 This is incredibly important research and the finished code can be
-given to Brent to expand the methodology beyond water and methane.
+handed over to the forcefield team to expand the methodology beyond
+water and methane.
  
 If the results are very good, we can invest effort in working on a GPU
 version of PIMD to actually simulate dynamics using this model.
