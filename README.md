@@ -74,11 +74,19 @@ given to Brent to expand the methodology beyond water and methane.
  
 If the results are very good, we can invest effort in working on a GPU
 version of PIMD to actually simulate dynamics using this model.
- 
+
+## References
+
 [1] http://journals.aps.org/prb/abstract/10.1103/PhysRevB.87.144103
+
 [2] http://journals.aps.org/prl/abstract/10.1103/PhysRevLett.110.227801
+
 [3] https://www.era.lib.ed.ac.uk/handle/1842/4878
+
 [4] http://www.pnas.org/content/112/20/6341.full
+
 [5] http://www-llb.cea.fr/WATSURF-2013/Presentations/ST/Flaviu_Cipcigan_les_Houches_2013.pdf
+
 [6] http://www.ncbi.nlm.nih.gov/pubmed/16354045
+
 [7] http://www.tandfonline.com/doi/abs/10.1080/00268976.2013.843032
