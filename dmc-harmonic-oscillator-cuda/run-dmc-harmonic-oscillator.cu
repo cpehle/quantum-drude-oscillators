@@ -71,11 +71,6 @@ int main(int argc, char** argv) {
       [=]MGPU_DEVICE(int index) {
         energy_data[index] = harmonic_oscillator_hamiltonian(old_walker_state_data[index]);
       }, num_walkers, context);
-
-    /*std::vector<float> host_energies = mgpu::from_mem(energy);
-    for(auto energy : host_energies) {
-      printf("% 13.3e \n", energy);
-      }*/
     
     // Birth-death I: calculate the number of copies of each walker in the
     // next generation
@@ -125,3 +120,5 @@ int main(int argc, char** argv) {
   }  
   return 0;
 }
+
+// nvcc -gencode arch=compute_52,code=sm_52 -std=c++11 -I libs/moderngpu/src --expt-extended-lambda -Xptxas="-v" -lineinfo
