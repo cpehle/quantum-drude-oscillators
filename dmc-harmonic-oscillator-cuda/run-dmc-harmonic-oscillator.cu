@@ -51,7 +51,7 @@ int main(int argc, char** argv) {
     // Diffusion: add a random gaussian of stddev dt to each walker's position
     mgpu::transform(
       [=]MGPU_DEVICE(uint index) {
-        uint4 result = curand_Philox4x32_10(uint4{index, niters, 0, 0}, uint2{seed, 0});
+        uint4 result = curand_Philox4x32_10(uint4{index, iter, 0, 0}, uint2{seed, 0});
         
         float2 hi = _curand_box_muller(result.x, result.y);
         float2 lo = _curand_box_muller(result.z, result.w);
@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     mgpu::transform(
       [=]MGPU_DEVICE(uint index) {
         float branching_factor = exp(-dt * (energy_data[index] - target_energy));
-        uint4 rand_result = curand_Philox4x32_10(uint4{index, niters, 1, 0}, uint2{seed, 0});
+        uint4 rand_result = curand_Philox4x32_10(uint4{index, iter, 1, 0}, uint2{seed, 0});
         float uniform_float = _curand_uniform(rand_result.x);
 
         children_data[index] = int(branching_factor + uniform_float);
