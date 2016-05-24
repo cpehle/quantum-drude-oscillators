@@ -20,16 +20,20 @@ MGPU_DEVICE float harmonic_oscillator_hamiltonian(walker_state_t state) {
 }
 
 int main(int argc, char** argv) {
-  mgpu::standard_context_t context;
-  int seed = 10;
-  int target_num_walkers = 100;
-  float dt = 0.01;
-
-  // for(int iter = 0; iter < 1 million; ++iter)
+  assert(argc == 3);
+  uint niters = atoi(argv[1]);
+  int target_num_walkers = atoi(argv[2]);
   
-  int num_walkers = target_num_walkers;
-  float target_energy = 0.0;
+  uint seed = 10;
+  float dt = 0.05;
+  float damping_alpha = 0.1;
 
+  float sqrt_dt = sqrt(dt);  
+  int num_walkers = target_num_walkers;
+  float target_energy = 1.0;
+
+  mgpu::standard_context_t context;
+  
   mgpu::mem_t<walker_state_t> old_walker_state(num_walkers, context);
   auto old_walker_state_data = old_walker_state.data();
   
@@ -39,76 +43,85 @@ int main(int argc, char** argv) {
       for(int ii = 0; ii < dim; ++ii)
         old_walker_state_data[index].pos[ii] = 0;
     }, num_walkers, context);
+    
+  for(uint iter = 0; iter < niters; ++iter) {
+    printf("%d %f\n", num_walkers, target_energy);
+    old_walker_state_data = old_walker_state.data();
 
-  // Diffusion: add a random gaussian to each walker's position
-  // TODO: times sqrt_t
-  mgpu::transform(
-    [=]MGPU_DEVICE(int index) {
-      curandStatePhilox4_32_10_t state;
-      
-      // ask JohnS if I can just seed++ each iteration, maybe sequence++
-      curand_init(seed, 0, index, &state); 
-      uint4 result = curand4(&state);
+    // Diffusion: add a random gaussian of stddev dt to each walker's position
+    mgpu::transform(
+      [=]MGPU_DEVICE(uint index) {
+        uint4 result = curand_Philox4x32_10(uint4{index, niters, 0, 0}, uint2{seed, 0});
+        
+        float2 hi = _curand_box_muller(result.x, result.y);
+        float2 lo = _curand_box_muller(result.z, result.w);
 
-      float2 hi = _curand_box_muller(result.x, result.y);
-      float2 lo = _curand_box_muller(result.z, result.w);
+        old_walker_state_data[index].pos[0] += sqrt_dt * hi.x;
+        old_walker_state_data[index].pos[1] += sqrt_dt * hi.y;
+        old_walker_state_data[index].pos[2] += sqrt_dt * lo.x;
 
-      old_walker_state_data[index].pos[0] += hi.x;
-      old_walker_state_data[index].pos[1] += hi.y;
-      old_walker_state_data[index].pos[2] += lo.x;
-      // old_walker_state_data[index].pos[3] += lo.y;
-    }, num_walkers, context);
+      }, num_walkers, context);
 
-  // Energy evaluation: evaluate the Hamiltonian at each walker's
-  // position
-  mgpu::mem_t<float> energy(num_walkers, context);
-  auto energy_data = energy.data();
+    // Energy evaluation: evaluate the Hamiltonian at each walker's
+    // position
+    mgpu::mem_t<float> energy(num_walkers, context);
+    auto energy_data = energy.data();
   
-  mgpu::transform(
-    [=]MGPU_DEVICE(int index) {
-      energy_data[index] = harmonic_oscillator_hamiltonian(old_walker_state_data[index]);
-    }, num_walkers, context);
+    mgpu::transform(
+      [=]MGPU_DEVICE(int index) {
+        energy_data[index] = harmonic_oscillator_hamiltonian(old_walker_state_data[index]);
+      }, num_walkers, context);
 
-  // Birth-death I: calculate the number of copies of each walker in the
-  // next generation
-  mgpu::mem_t<int> children(num_walkers, context);
-  int* children_data = children.data();
+    /*std::vector<float> host_energies = mgpu::from_mem(energy);
+    for(auto energy : host_energies) {
+      printf("% 13.3e \n", energy);
+      }*/
+    
+    // Birth-death I: calculate the number of copies of each walker in the
+    // next generation
+    mgpu::mem_t<int> children(num_walkers, context);
+    int* children_data = children.data();
 
-  mgpu::transform(
-    [=]MGPU_DEVICE(int index) {
-      children_data[index] = exp(-dt * (energy_data[index] - target_energy));
-      // TODO plus a uniformly distributed integer in [0,1]
-    }, num_walkers, context);
+    mgpu::transform(
+      [=]MGPU_DEVICE(uint index) {
+        float branching_factor = exp(-dt * (energy_data[index] - target_energy));
+        uint4 rand_result = curand_Philox4x32_10(uint4{index, niters, 1, 0}, uint2{seed, 0});
+        float uniform_float = _curand_uniform(rand_result.x);
 
-  // Birth-death II: compute a prefix-sum of the number-of-copies for
-  // each walker
-  mgpu::mem_t<int> children_offsets(num_walkers, context);
-  mgpu::mem_t<int> total_children(1, context);
-  mgpu::scan(children.data(), num_walkers, children_offsets.data(),
-             mgpu::plus_t<int>(), total_children.data(), context);
+        children_data[index] = int(branching_factor + uniform_float);
+      }, num_walkers, context);
 
-  // Birth-death III: Now create children-number of copies of each
-  // walker into a second array.
-  int num_children = from_mem(total_children)[0];
+    // Birth-death II: compute a prefix-sum of the number-of-copies for
+    // each walker
+    mgpu::mem_t<int> children_offsets(num_walkers, context);
+    mgpu::mem_t<int> total_children(1, context);
+    mgpu::scan(children.data(), num_walkers, children_offsets.data(),
+               mgpu::plus_t<int>(), total_children.data(), context);
 
-  mgpu::mem_t<int> next_gen(num_children, context);
-  int* next_gen_data = next_gen.data();
+    // Birth-death III: Now create children-number of copies of each
+    // walker into a second array.
+    int num_children = from_mem(total_children)[0];
+    assert(num_children > 0);
 
-  // Fill next_gen with the value of the parent walker.
-  mgpu::mem_t<walker_state_t> new_walker_state(num_children, context);
-  auto new_state = new_walker_state.data();
+    mgpu::mem_t<int> next_gen(num_children, context);
+    int* next_gen_data = next_gen.data();
 
-  mgpu::transform_lbs(
-    [=]MGPU_DEVICE(int index, int parent, int sibling,
-                   mgpu::tuple<walker_state_t> desc) {
-      new_state[index] = mgpu::get<0>(desc);
-    }, num_children, children_offsets.data(), num_walkers, 
-    mgpu::make_tuple(old_walker_state.data()),
-    context
-  );
+    // Fill next_gen with the value of the parent walker.
+    mgpu::mem_t<walker_state_t> new_walker_state(num_children, context);
+    auto new_state = new_walker_state.data();
+
+    mgpu::transform_lbs(
+      [=]MGPU_DEVICE(int index, int parent, int sibling,
+                     mgpu::tuple<walker_state_t> desc) {
+        new_state[index] = mgpu::get<0>(desc);
+      }, num_children, children_offsets.data(), num_walkers, 
+      mgpu::make_tuple(old_walker_state.data()),
+      context
+      );
   
-  old_walker_state.swap(new_walker_state);
-  num_walkers = num_children;
-  
+    old_walker_state.swap(new_walker_state);
+    num_walkers = num_children;
+    target_energy += damping_alpha * (log(target_num_walkers) - log(num_walkers));
+  }  
   return 0;
 }
