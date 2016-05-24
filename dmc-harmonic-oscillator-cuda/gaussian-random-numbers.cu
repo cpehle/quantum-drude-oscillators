@@ -12,18 +12,18 @@ int main(int argc, char** argv) {
   assert(argc == 2);
   mgpu::standard_context_t context;
 
-  int count = 1000;
-  int seed = atoi(argv[1]);
+  uint count = 10000;
+  uint seed = atoi(argv[1]);
 
   mgpu::mem_t<float2> outputs(count, context);
   auto outputs_data = outputs.data();
 
   mgpu::transform(
-    [=]MGPU_DEVICE(int index) {
-      curandStatePhilox4_32_10_t state;
+    [=]MGPU_DEVICE(uint index) {
+      uint4 c {index, 0, 0, 0};
+      uint2 k = {seed, 0};
 
-      curand_init(seed, 0, index, &state);
-      uint4 result = curand4(&state);
+      uint4 result = curand_Philox4x32_10(c, k);
 
       float2 yo = _curand_box_muller(result.x, result.y);
       outputs_data[index] = yo;
