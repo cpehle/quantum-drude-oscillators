@@ -51,6 +51,16 @@ def metropolis(pos, pos_prime, dt):
     denominator = SHO_trial_wavefunction(pos)**2       * greens_diffusion(pos, pos_prime, dt)
     return numerator/denominator
 
+# pick trial wavefunction phi_t(x) = pi^(-1/4) exp(-x^2/2)
+class HarmonicOscillator(object):
+    @staticmethod
+    def local_energy(pos):
+        # (H phi_t)/phi_t
+        # where H = (-1/2)d^2/dx^2 + (1/2)x^2
+        # Since we chose the exactly correct answer, it turns out
+        # that:
+        return 0.5
+
 if __name__ == "__main__":
     dd = DMC(300,potential=SHO_3d_single, dimension=(1,3))
     es = []
