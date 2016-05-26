@@ -74,6 +74,10 @@ class HarmonicOscillator(Walker):
         return np.zeros_like(pos)
 
 # phi_t(x) = sqrt(alpha) pi^(-1/4) exp(-alpha^2 x^2 / 2)
+# This interpolates between the above two samplers: at alpha=0, it
+# reproduces the naive approach with no importance sampling. At
+# alpha=1, it reproduces perfect sampling with no variance. At
+# intermediate values, we get intermediate variances.
 def ImportanceSampledHarmonicOscillator(alpha):
     class Oscillator(Walker):
         @staticmethod
@@ -87,9 +91,24 @@ def ImportanceSampledHarmonicOscillator(alpha):
 
     return Oscillator        
 
+def main(args):
+    dd = DMC(ImportanceSampledHarmonicOscillator(args.alpha),
+             args.nwalkers,
+             dimension=(1,))
+
+    for ii in xrange(args.nsteps):
+        print dd.timestep(args.timestep), len(dd.walkers)
+
+def opts():
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--timestep", type=float, default=0.05)
+    parser.add_argument("--alpha", type=float, default=0.05,
+                        help="Controls the quality of trial wavefunction. 1 is perfect guidance, 0 is no guidance")
+    parser.add_argument("--nwalkers", type=int, default=300)
+    parser.add_argument("--nsteps", type=int, default=1000)
+    return parser
+
 if __name__ == "__main__":
-    dd = DMC(ImportanceSampledHarmonicOscillator(0.95), 300, dimension=(1,))
-    es = []
-    for ii in xrange(1000):
-        es.append(dd.timestep(0.05))
-        print es[-1], len(dd.walkers)
+    main(opts().parse_args())
