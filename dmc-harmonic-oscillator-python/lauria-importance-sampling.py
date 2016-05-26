@@ -8,7 +8,7 @@ class Walker(object):
         
     def step(self, dt, target_energy):
         E_before = self.local_energy(self.pos)
-        self.pos += np.sqrt(dt) * np.random.randn(*self.pos.shape) + dt*self.quantum_force(self.pos)/2
+        self.pos += np.sqrt(dt) * np.random.randn(*self.pos.shape) + dt*self.quantum_force(self.pos)
         E_after = self.local_energy(self.pos)
 
         branching_factor = np.exp(-dt * (0.5*(E_after + E_before) - target_energy))
@@ -34,7 +34,7 @@ class DMC(object):
         for walker in self.walkers:
             branching_factor = walker.step(dt, self.target_energy)
 
-            energy += branching_factor * walker.potential(walker.pos)
+            energy += branching_factor * walker.local_energy(walker.pos)
             total_weight += branching_factor
             
             ncopies = int(branching_factor + np.random.random())
@@ -45,28 +45,51 @@ class DMC(object):
         return energy/total_weight
 
 # pick trial wavefunction phi_t(x) = pi^(-1/4) exp(-x^2/2)
-class HarmonicOscillator(Walker):
+class PerfectlySampledHarmonicOscillator(Walker):
     @staticmethod
     def local_energy(pos):
         # (H phi_t)/phi_t
         # where H = (-1/2)d^2/dx^2 + (1/2)x^2
         # Since we chose the exactly correct answer, it turns out to
-        # be a constant. Changing it to 0 does not change the result.
+        # be a constant.
         return 0.5 * pos.shape[0]
-
-    @staticmethod
-    def potential(pos):
-        # x^2/2
-        return pos.dot(pos)/2
 
     @staticmethod
     def quantum_force(pos):
         # (grad phi_t)/phi_t
         return -pos
 
+# phi_t(x) = 1
+class HarmonicOscillator(Walker):
+    @staticmethod
+    def local_energy(pos):
+        # (H 1)/1
+        # = (-1/2)d^2/dx^2(1) + 1/2x^2
+        # = x^2/2
+        return pos.dot(pos)/2
+
+    @staticmethod
+    def quantum_force(pos):
+        # (grad 1)/1
+        return np.zeros_like(pos)
+
+# phi_t(x) = sqrt(alpha) pi^(-1/4) exp(-alpha^2 x^2 / 2)
+def ImportanceSampledHarmonicOscillator(alpha):
+    class Oscillator(Walker):
+        @staticmethod
+        def local_energy(pos):
+            term = alpha**2 + (1 - alpha**4) * pos.dot(pos)
+            return term/2
+
+        @staticmethod
+        def quantum_force(pos):
+            return -pos * alpha**2
+
+    return Oscillator        
+
 if __name__ == "__main__":
-    dd = DMC(HarmonicOscillator, 300, dimension=(3,))
+    dd = DMC(ImportanceSampledHarmonicOscillator(0.95), 300, dimension=(1,))
     es = []
     for ii in xrange(1000):
         es.append(dd.timestep(0.05))
-        print es[-1]
+        print es[-1], len(dd.walkers)
