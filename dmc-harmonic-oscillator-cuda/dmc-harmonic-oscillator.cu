@@ -7,7 +7,7 @@
 #include <curand_kernel.h>
 #include <curand_normal.h>
 
-const int dim = 3;
+const int dim = 1;
 
 struct alignas(8) walker_state_t {
   float pos[dim];
@@ -19,6 +19,12 @@ MGPU_DEVICE float harmonic_oscillator_hamiltonian(walker_state_t state) {
     xx += state.pos[ii]*state.pos[ii];
   return xx/2;
 }
+
+struct plus_float2_t : public std::binary_function<float2, float2, float2> {
+  MGPU_HOST_DEVICE float2 operator()(float2 a, float2 b) const {
+    return float2{a.x + b.x, a.y + b.y};
+  }
+};
 
 int main(int argc, char** argv) {
   assert(argc == 3);
@@ -46,7 +52,6 @@ int main(int argc, char** argv) {
     }, num_walkers, context);
     
   for(uint iter = 0; iter < niters; ++iter) {
-    printf("%d %f\n", num_walkers, target_energy);
     old_walker_state_data = old_walker_state.data();
 
     // Diffusion: add a random gaussian of stddev dt to each walker's position
@@ -58,8 +63,8 @@ int main(int argc, char** argv) {
         float2 lo = _curand_box_muller(result.z, result.w);
 
         old_walker_state_data[index].pos[0] += sqrt_dt * hi.x;
-        old_walker_state_data[index].pos[1] += sqrt_dt * hi.y;
-        old_walker_state_data[index].pos[2] += sqrt_dt * lo.x;
+        //old_walker_state_data[index].pos[1] += sqrt_dt * hi.y;
+        //old_walker_state_data[index].pos[2] += sqrt_dt * lo.x;
 
       }, num_walkers, context);
 
@@ -78,7 +83,9 @@ int main(int argc, char** argv) {
     mgpu::mem_t<int> children(num_walkers, context);
     int* children_data = children.data();
 
-    mgpu::mem_t<float> energy_estimate(1, context);
+    // We will also estimate the average energy at this point since it
+    // uses the branching-factor used to compute birth and death.
+    mgpu::mem_t<float2> energy_estimate_device(1, context);
     mgpu::transform_reduce(
       [=]MGPU_DEVICE(uint index) {
         float branching_factor = exp(-dt * (energy_data[index] - target_energy));
@@ -87,8 +94,16 @@ int main(int argc, char** argv) {
 
         children_data[index] = int(branching_factor + uniform_float);
 
-        return branching_factor * energy_data[index];
-      }, num_walkers, energy_estimate.data(), mgpu::plus_t<float>(), context);
+        return float2{branching_factor, branching_factor * energy_data[index]};
+      },
+      num_walkers,
+      energy_estimate_device.data(),
+      plus_float2_t(),
+      context);
+
+    float2 energy_estimate_host = mgpu::from_mem(energy_estimate_device)[0];
+    float energy_estimate = energy_estimate_host.y / energy_estimate_host.x;
+    printf("%f %d %f\n", energy_estimate, num_walkers, target_energy);
 
     // Birth-death II: compute a prefix-sum of the number-of-copies for
     // each walker
@@ -99,7 +114,7 @@ int main(int argc, char** argv) {
 
     // Birth-death III: Now create children-number of copies of each
     // walker into a second array.
-    int num_children = from_mem(total_children)[0];
+    int num_children = mgpu::from_mem(total_children)[0];
     assert(num_children > 0);
 
     mgpu::mem_t<int> next_gen(num_children, context);
