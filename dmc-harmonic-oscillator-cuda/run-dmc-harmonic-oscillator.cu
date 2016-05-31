@@ -77,14 +77,17 @@ int main(int argc, char** argv) {
     mgpu::mem_t<int> children(num_walkers, context);
     int* children_data = children.data();
 
-    mgpu::transform(
+    mgpu::mem_t<float> energy_estimate(1, context);
+    mgpu::transform_reduce(
       [=]MGPU_DEVICE(uint index) {
         float branching_factor = exp(-dt * (energy_data[index] - target_energy));
         uint4 rand_result = curand_Philox4x32_10(uint4{index, iter, 1, 0}, uint2{seed, 0});
         float uniform_float = _curand_uniform(rand_result.x);
 
         children_data[index] = int(branching_factor + uniform_float);
-      }, num_walkers, context);
+
+        return branching_factor * energy_data[index];
+      }, num_walkers, energy_estimate.data(), mgpu::plus_t<float>, context);
 
     // Birth-death II: compute a prefix-sum of the number-of-copies for
     // each walker
