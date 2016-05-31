@@ -2,6 +2,7 @@
 #include <moderngpu/transform.hxx>
 #include <moderngpu/kernel_scan.hxx>
 #include <moderngpu/kernel_load_balance.hxx>
+#include <moderngpu/kernel_reduce.hxx>
 
 #include <curand_kernel.h>
 #include <curand_normal.h>
@@ -87,7 +88,7 @@ int main(int argc, char** argv) {
         children_data[index] = int(branching_factor + uniform_float);
 
         return branching_factor * energy_data[index];
-      }, num_walkers, energy_estimate.data(), mgpu::plus_t<float>, context);
+      }, num_walkers, energy_estimate.data(), mgpu::plus_t<float>(), context);
 
     // Birth-death II: compute a prefix-sum of the number-of-copies for
     // each walker
