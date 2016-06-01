@@ -7,7 +7,7 @@
 #include <curand_kernel.h>
 #include <curand_normal.h>
 
-const int walker_dimension = 3;
+const int walker_dimension = 6;
 
 struct alignas(8) walker_state_t {
   float pos[walker_dimension];
@@ -26,16 +26,40 @@ struct plus_float2_t : public std::binary_function<float2, float2, float2> {
   }
 };
 
-struct array_float_4_t {
-  float values[4];
+template<int Arity>
+struct array_float_t {
+  float values[Arity];
+  MGPU_DEVICE float operator[] (size_t n) const {
+    return values[n];
+  }
 };
 
-MGPU_DEVICE array_float_4_t random_gaussians(uint4 counter, uint2 key) {
-  uint4 result = curand_Philox4x32_10(counter, key);
-  float2 hi = _curand_box_muller(result.x, result.y);
-  float2 lo = _curand_box_muller(result.z, result.w);
-  array_float_4_t answer;
-  answer.values[0] = hi.x; answer.values[1] = hi.y; answer.values[2] = lo.x; answer.values[3] = lo.y;
+template<int Arity>
+MGPU_DEVICE array_float_t<Arity> random_gaussians(uint4 counter, uint2 key) {
+  enum { n_blocks = (Arity + 4 - 1)/4 };
+
+  float scratch[n_blocks * 4];
+  
+  mgpu::iterate<n_blocks>([&](uint index) {
+      uint4 local_counter = counter; local_counter.w = index;
+      uint4 result = curand_Philox4x32_10(local_counter, key);
+
+      float2 hi = _curand_box_muller(result.x, result.y);
+      float2 lo = _curand_box_muller(result.z, result.w);
+
+      uint ii = index*4;
+      scratch[ii] = hi.x;
+      scratch[ii+1] = hi.y;
+      scratch[ii+2] = lo.x;
+      scratch[ii+3] = lo.y;
+    });
+
+  array_float_t<Arity> answer;
+
+  mgpu::iterate<Arity>([&](uint index) {
+      answer.values[index] = scratch[index];
+    });
+  
   return answer;
 }
 
@@ -50,7 +74,7 @@ int main(int argc, char** argv) {
 
   float sqrt_dt = sqrt(dt);  
   int num_walkers = target_num_walkers;
-  float target_energy = 1.0;
+  float target_energy;
 
   mgpu::standard_context_t context;
   
@@ -60,9 +84,9 @@ int main(int argc, char** argv) {
   // Initialize all walker positions to random gaussians of std 1
   mgpu::transform(
     [=]MGPU_DEVICE(uint index) {
-      auto randoms = random_gaussians(uint4{index, 0, 0, 0}, uint2{seed, 1});
+      auto randoms = random_gaussians<walker_dimension>(uint4{index, 0, 0, 0}, uint2{seed, 0});
       mgpu::iterate<walker_dimension>([&](int dimension_index) {
-          old_walker_state_data[index].pos[dimension_index] = randoms.values[dimension_index];
+          old_walker_state_data[index].pos[dimension_index] = randoms[dimension_index];
         });
     }, num_walkers, context);
     
@@ -76,16 +100,16 @@ int main(int argc, char** argv) {
     mgpu::transform_reduce(
       [=]MGPU_DEVICE(uint index) {
         auto walker_state = old_walker_state_data[index];          
-        
-        auto randoms = random_gaussians(uint4{index, iter, 0, 0}, uint2{seed, 0});
+
+        auto diffusion_randoms = random_gaussians<walker_dimension>(uint4{index, iter, 0, 0}, uint2{seed, 1});
         
         // Energy evaluation: evaluate the Hamiltonian at each walker's
         // position.
         auto energy_before = harmonic_oscillator_hamiltonian(walker_state);
 
         // Diffusion: add a random gaussian of stddev dt to each walker's position
-        mgpu::iterate<walker_dimension>([&](int dimension_index) {
-            walker_state.pos[dimension_index] += sqrt_dt * randoms.values[dimension_index];
+        mgpu::iterate<walker_dimension>([&](uint dimension_index) {
+            walker_state.pos[dimension_index] += sqrt_dt * diffusion_randoms.values[dimension_index];
           });
         auto energy_after = harmonic_oscillator_hamiltonian(walker_state);
 
@@ -96,7 +120,7 @@ int main(int argc, char** argv) {
         // We will also estimate the average energy at this point since it
         // uses the branching-factor used to compute birth and death.
         float branching_factor = exp(-dt * (0.5*(energy_before + energy_after) - target_energy));
-        uint4 rand_result = curand_Philox4x32_10(uint4{index, iter, 1, 0}, uint2{seed, 0});
+        uint4 rand_result = curand_Philox4x32_10(uint4{index, iter, 0, 0}, uint2{seed, 2});
         float uniform_float = _curand_uniform(rand_result.x);
 
         children_data[index] = int(branching_factor + uniform_float);
@@ -109,8 +133,17 @@ int main(int argc, char** argv) {
       context);
 
     float2 energy_estimate_host = mgpu::from_mem(energy_estimate_device)[0];
+    assert(!std::isnan(energy_estimate_host.x));
+    assert(std::isfinite(energy_estimate_host.x));
+    assert(!std::isnan(energy_estimate_host.y));
+    assert(std::isfinite(energy_estimate_host.y));
+    assert(energy_estimate_host.x != 0);
+    
     float energy_estimate = energy_estimate_host.y / energy_estimate_host.x;
-    printf("%f %d %f\n", energy_estimate, num_walkers, target_energy);
+    printf("%f %d %f\n", energy_estimate, num_walkers, target_energy);    
+    assert(!std::isnan(energy_estimate));
+    assert(std::isfinite(energy_estimate));
+    
 
     // Birth-death II: compute a prefix-sum of the number-of-copies for
     // each walker
@@ -139,7 +172,11 @@ int main(int argc, char** argv) {
   
     old_walker_state.swap(new_walker_state);
     num_walkers = num_children;
-    target_energy += damping_alpha * (log(target_num_walkers) - log(num_walkers));
+    
+    if(iter == 0)
+      target_energy = energy_estimate;
+    else
+      target_energy += damping_alpha * (log(target_num_walkers) - log(num_walkers));
   }  
   return 0;
 }
