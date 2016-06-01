@@ -19,6 +19,22 @@ MGPU_DEVICE float harmonic_oscillator_hamiltonian(walker_state_t state) {
   return xx/2;
 }
 
+MGPU_DEVICE float helium_hamiltonian(walker_state_t state) {
+/*  r1,r2,r12 = norm(pos[0]), norm(pos[1]), norm(pos[0]-pos[1])
+    return 1/r12 - 2/r1 - 2/r2
+*/
+  float r1=0, r2=0, r12=0, tmp;
+  for(int ii = 0; ii < 3; ++ii) {
+    r1  += state.pos[ii] * state.pos[ii];
+    r2  += state.pos[ii+3] * state.pos[ii+3];
+
+    tmp = state.pos[ii+3] - state.pos[ii];
+    r12 += tmp*tmp;
+  }
+  r1 = sqrt(r1); r2 = sqrt(r2); r12 = sqrt(r12);
+  return 1/r12 - 2/r1 - 2/r2;
+}
+
 struct plus_float2_t : public std::binary_function<float2, float2, float2> {
   MGPU_HOST_DEVICE float2 operator()(float2 a, float2 b) const {
     return float2{a.x + b.x, a.y + b.y};
@@ -31,7 +47,7 @@ int main(int argc, char** argv) {
   int target_num_walkers = atoi(argv[2]);
   
   uint seed = 10;
-  float dt = 0.05;
+  float dt = 0.005;
   float damping_alpha = 0.1;
 
   float sqrt_dt = sqrt(dt);  
@@ -67,13 +83,13 @@ int main(int argc, char** argv) {
         
         // Energy evaluation: evaluate the Hamiltonian at each walker's
         // position.
-        auto energy_before = harmonic_oscillator_hamiltonian(walker_state);
+        auto energy_before = helium_hamiltonian(walker_state);
 
         // Diffusion: add a random gaussian of stddev dt to each walker's position
         mgpu::iterate<walker_dimension>([&](uint dimension_index) {
             walker_state.pos[dimension_index] += sqrt_dt * diffusion_randoms.values[dimension_index];
           });
-        auto energy_after = harmonic_oscillator_hamiltonian(walker_state);
+        auto energy_after = helium_hamiltonian(walker_state);
 
         old_walker_state_data[index] = walker_state;
         // Birth-death I: calculate the number of copies of each walker in the
