@@ -53,50 +53,42 @@ int main(int argc, char** argv) {
     
   for(uint iter = 0; iter < niters; ++iter) {
     old_walker_state_data = old_walker_state.data();
-
-    // Diffusion: add a random gaussian of stddev dt to each walker's position
-    mgpu::transform(
+    mgpu::mem_t<int> children(num_walkers, context);
+    int* children_data = children.data();
+    
+    mgpu::mem_t<float2> energy_estimate_device(1, context);
+    
+    mgpu::transform_reduce(
       [=]MGPU_DEVICE(uint index) {
+        auto walker_state = old_walker_state_data[index];          
         uint4 result = curand_Philox4x32_10(uint4{index, iter, 0, 0}, uint2{seed, 0});
         
         float2 hi = _curand_box_muller(result.x, result.y);
         float2 lo = _curand_box_muller(result.z, result.w);
 
-        old_walker_state_data[index].pos[0] += sqrt_dt * hi.x;
-        //old_walker_state_data[index].pos[1] += sqrt_dt * hi.y;
-        //old_walker_state_data[index].pos[2] += sqrt_dt * lo.x;
+        // Energy evaluation: evaluate the Hamiltonian at each walker's
+        // position.
+        auto energy_before = harmonic_oscillator_hamiltonian(walker_state);
 
-      }, num_walkers, context);
+        // Diffusion: add a random gaussian of stddev dt to each walker's position
+        walker_state.pos[0] += sqrt_dt * hi.x;
+        auto energy_after = harmonic_oscillator_hamiltonian(walker_state);
 
-    // Energy evaluation: evaluate the Hamiltonian at each walker's
-    // position
-    mgpu::mem_t<float> energy(num_walkers, context);
-    auto energy_data = energy.data();
-  
-    mgpu::transform(
-      [=]MGPU_DEVICE(int index) {
-        energy_data[index] = harmonic_oscillator_hamiltonian(old_walker_state_data[index]);
-      }, num_walkers, context);
-    
-    // Birth-death I: calculate the number of copies of each walker in the
-    // next generation
-    mgpu::mem_t<int> children(num_walkers, context);
-    int* children_data = children.data();
+        old_walker_state_data[index] = walker_state;
+        // Birth-death I: calculate the number of copies of each walker in the
+        // next generation
 
-    // We will also estimate the average energy at this point since it
-    // uses the branching-factor used to compute birth and death.
-    mgpu::mem_t<float2> energy_estimate_device(1, context);
-    mgpu::transform_reduce(
-      [=]MGPU_DEVICE(uint index) {
-        float branching_factor = exp(-dt * (energy_data[index] - target_energy));
+        // We will also estimate the average energy at this point since it
+        // uses the branching-factor used to compute birth and death.
+        float branching_factor = exp(-dt * (0.5*(energy_before + energy_after) - target_energy));
         uint4 rand_result = curand_Philox4x32_10(uint4{index, iter, 1, 0}, uint2{seed, 0});
         float uniform_float = _curand_uniform(rand_result.x);
 
         children_data[index] = int(branching_factor + uniform_float);
 
-        return float2{branching_factor, branching_factor * energy_data[index]};
-      },
-      num_walkers,
+        return float2{branching_factor, branching_factor * energy_after};        
+        
+      }, num_walkers,
       energy_estimate_device.data(),
       plus_float2_t(),
       context);
@@ -117,10 +109,7 @@ int main(int argc, char** argv) {
     int num_children = mgpu::from_mem(total_children)[0];
     assert(num_children > 0);
 
-    mgpu::mem_t<int> next_gen(num_children, context);
-    int* next_gen_data = next_gen.data();
-
-    // Fill next_gen with the value of the parent walker.
+    // Fill new_walker_state with the value of the parent walker.
     mgpu::mem_t<walker_state_t> new_walker_state(num_children, context);
     auto new_state = new_walker_state.data();
 
