@@ -7,15 +7,15 @@
 #include <curand_kernel.h>
 #include <curand_normal.h>
 
-const int dim = 1;
+const int walker_dimension = 3;
 
 struct alignas(8) walker_state_t {
-  float pos[dim];
+  float pos[walker_dimension];
 };
 
 MGPU_DEVICE float harmonic_oscillator_hamiltonian(walker_state_t state) {
   float xx;
-  for(int ii = 0; ii < dim; ++ii)
+  for(int ii = 0; ii < walker_dimension; ++ii)
     xx += state.pos[ii]*state.pos[ii];
   return xx/2;
 }
@@ -25,6 +25,19 @@ struct plus_float2_t : public std::binary_function<float2, float2, float2> {
     return float2{a.x + b.x, a.y + b.y};
   }
 };
+
+struct array_float_4_t {
+  float values[4];
+};
+
+MGPU_DEVICE array_float_4_t random_gaussians(uint4 counter, uint2 key) {
+  uint4 result = curand_Philox4x32_10(counter, key);
+  float2 hi = _curand_box_muller(result.x, result.y);
+  float2 lo = _curand_box_muller(result.z, result.w);
+  array_float_4_t answer;
+  answer.values[0] = hi.x; answer.values[1] = hi.y; answer.values[2] = lo.x; answer.values[3] = lo.y;
+  return answer;
+}
 
 int main(int argc, char** argv) {
   assert(argc == 3);
@@ -44,11 +57,13 @@ int main(int argc, char** argv) {
   mgpu::mem_t<walker_state_t> old_walker_state(num_walkers, context);
   auto old_walker_state_data = old_walker_state.data();
   
-  // Initialize all walker positions to 0
+  // Initialize all walker positions to random gaussians of std 1
   mgpu::transform(
-    [=]MGPU_DEVICE(int index) {
-      for(int ii = 0; ii < dim; ++ii)
-        old_walker_state_data[index].pos[ii] = 0;
+    [=]MGPU_DEVICE(uint index) {
+      auto randoms = random_gaussians(uint4{index, 0, 0, 0}, uint2{seed, 1});
+      mgpu::iterate<walker_dimension>([&](int dimension_index) {
+          old_walker_state_data[index].pos[dimension_index] = randoms.values[dimension_index];
+        });
     }, num_walkers, context);
     
   for(uint iter = 0; iter < niters; ++iter) {
@@ -61,17 +76,17 @@ int main(int argc, char** argv) {
     mgpu::transform_reduce(
       [=]MGPU_DEVICE(uint index) {
         auto walker_state = old_walker_state_data[index];          
-        uint4 result = curand_Philox4x32_10(uint4{index, iter, 0, 0}, uint2{seed, 0});
         
-        float2 hi = _curand_box_muller(result.x, result.y);
-        float2 lo = _curand_box_muller(result.z, result.w);
-
+        auto randoms = random_gaussians(uint4{index, iter, 0, 0}, uint2{seed, 0});
+        
         // Energy evaluation: evaluate the Hamiltonian at each walker's
         // position.
         auto energy_before = harmonic_oscillator_hamiltonian(walker_state);
 
         // Diffusion: add a random gaussian of stddev dt to each walker's position
-        walker_state.pos[0] += sqrt_dt * hi.x;
+        mgpu::iterate<walker_dimension>([&](int dimension_index) {
+            walker_state.pos[dimension_index] += sqrt_dt * randoms.values[dimension_index];
+          });
         auto energy_after = harmonic_oscillator_hamiltonian(walker_state);
 
         old_walker_state_data[index] = walker_state;
