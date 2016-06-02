@@ -76,7 +76,11 @@ struct DMC {
 
   void initialize() {
     auto old_walker_state_data = old_walker_state.data();
-  
+
+    /* Explicitly dereference this-pointer to avoid closing over it in
+     * the lambda below. */
+    auto seed = this->seed;
+    
     // Initialize all walker positions to random gaussians of std 1
     mgpu::transform(
       [=]MGPU_DEVICE(uint index) {
@@ -91,6 +95,9 @@ struct DMC {
     auto old_walker_state_data = old_walker_state.data();
     mgpu::mem_t<int> children(num_walkers, context);
     int* children_data = children.data();
+
+    auto local_iter = this->iter, seed = this->seed;
+    auto sqrt_dt = this->sqrt_dt, dt = this->dt, local_target_energy = this->target_energy;
     
     mgpu::mem_t<float2> energy_estimate_device(1, context);
     
@@ -98,7 +105,7 @@ struct DMC {
       [=]MGPU_DEVICE(uint index) {
         auto walker_state = old_walker_state_data[index];          
 
-        auto diffusion_randoms = gpu_random::gaussians<system_t::Dimension>(uint4{index, iter, 0, 0}, uint2{seed, 1});
+        auto diffusion_randoms = gpu_random::gaussians<system_t::Dimension>(uint4{index, local_iter, 0, 0}, uint2{seed, 1});
         
         // Energy evaluation: evaluate the Hamiltonian at each walker's
         // position.
@@ -108,7 +115,7 @@ struct DMC {
         mgpu::iterate<system_t::Dimension>([&](uint dimension_index) {
             walker_state.pos[dimension_index] += sqrt_dt * diffusion_randoms.values[dimension_index];
           });
-        auto energy_after = 0; //helium_hamiltonian(walker_state);
+        auto energy_after = system_t::local_energy(walker_state);
 
         old_walker_state_data[index] = walker_state;
         // Birth-death I: calculate the number of copies of each walker in the
@@ -116,13 +123,13 @@ struct DMC {
 
         // We will also estimate the average energy at this point since it
         // uses the branching-factor used to compute birth and death.
-        float branching_factor = exp(-dt * (0.5*(energy_before + energy_after) - target_energy));
+        float branching_factor = exp(-dt * (0.5*(energy_before + energy_after) - local_target_energy));
 
-        auto branching_random = gpu_random::uniforms<1>(uint4{index, iter, 0, 0}, uint2{seed, 2})[0];
+        auto branching_random = gpu_random::uniforms<1>(uint4{index, local_iter, 0, 0}, uint2{seed, 2})[0];
 
         children_data[index] = int(branching_factor + branching_random);
 
-        return float2{branching_factor, branching_factor * energy_after};        
+        return float2{branching_factor, branching_factor * (energy_after+energy_before)/2};
         
       }, num_walkers,
       energy_estimate_device.data(),
