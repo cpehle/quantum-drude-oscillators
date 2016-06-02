@@ -6,70 +6,89 @@
 
 #include "random-numbers.hxx"
 
-const int walker_dimension = 6;
-
-struct alignas(8) walker_state_t {
-  float pos[walker_dimension];
-};
-
-MGPU_DEVICE float harmonic_oscillator_hamiltonian(walker_state_t state) {
-  float xx;
-  for(int ii = 0; ii < walker_dimension; ++ii)
-    xx += state.pos[ii]*state.pos[ii];
-  return xx/2;
-}
-
-MGPU_DEVICE float helium_hamiltonian(walker_state_t state) {
-/*  r1,r2,r12 = norm(pos[0]), norm(pos[1]), norm(pos[0]-pos[1])
-    return 1/r12 - 2/r1 - 2/r2
-*/
-  float r1=0, r2=0, r12=0, tmp;
-  for(int ii = 0; ii < 3; ++ii) {
-    r1  += state.pos[ii] * state.pos[ii];
-    r2  += state.pos[ii+3] * state.pos[ii+3];
-
-    tmp = state.pos[ii+3] - state.pos[ii];
-    r12 += tmp*tmp;
-  }
-  r1 = sqrt(r1); r2 = sqrt(r2); r12 = sqrt(r12);
-  return 1/r12 - 2/r1 - 2/r2;
-}
-
 struct plus_float2_t : public std::binary_function<float2, float2, float2> {
   MGPU_HOST_DEVICE float2 operator()(float2 a, float2 b) const {
     return float2{a.x + b.x, a.y + b.y};
   }
 };
 
-int main(int argc, char** argv) {
-  assert(argc == 3);
-  uint niters = atoi(argv[1]);
-  int target_num_walkers = atoi(argv[2]);
+template<int Dimension_>
+struct quantum_system_t {
+  enum { Dimension = Dimension_};
+
+  struct alignas(8) walker_state_t {
+    float pos[Dimension];
+  };
+};
+
+template<int Dim>
+struct harmonic_oscillator : quantum_system_t<Dim> {
+  using walker_state_t = typename quantum_system_t<Dim>::walker_state_t;
+  MGPU_DEVICE static float local_energy(walker_state_t state) {
+    float xx = 0;
+    for(int ii = 0; ii < Dim; ++ii)
+      xx += state.pos[ii]*state.pos[ii];
+    return xx/2;
+  }
+};
+
+struct helium : quantum_system_t<6> {
+  MGPU_DEVICE static float local_energy(walker_state_t state) {
+    /* r1,r2,r12 = norm(pos[0]), norm(pos[1]), norm(pos[0]-pos[1])
+       return 1/r12 - 2/r1 - 2/r2
+    */
+
+    float r1=0, r2=0, r12=0, tmp;
+    for(int ii = 0; ii < 3; ++ii) {
+      r1  += state.pos[ii] * state.pos[ii];
+      r2  += state.pos[ii+3] * state.pos[ii+3];
+
+      tmp = state.pos[ii+3] - state.pos[ii];
+      r12 += tmp*tmp;
+    }
+    r1 = sqrt(r1); r2 = sqrt(r2); r12 = sqrt(r12);
+    return 1/r12 - 2/r1 - 2/r2;
+  }
+};
+
+template<typename tt>
+struct DMC {
+  using system_t = tt;
+  using walker_state_t = typename system_t::walker_state_t;
   
+  mgpu::mem_t<walker_state_t> old_walker_state;
+  mgpu::context_t & context;
   uint seed = 10;
   float dt = 0.005;
   float damping_alpha = 0.1;
-
-  float sqrt_dt = sqrt(dt);  
-  int num_walkers = target_num_walkers;
-  float target_energy;
-
-  mgpu::standard_context_t context;
+  float sqrt_dt = sqrt(dt);
+  uint num_walkers;
+  uint iter = 0;
+  float target_energy = 0.0;
+  int target_num_walkers;
   
-  mgpu::mem_t<walker_state_t> old_walker_state(num_walkers, context);
-  auto old_walker_state_data = old_walker_state.data();
+  DMC(int target_num_walkers, mgpu::context_t & context) :
+    num_walkers(target_num_walkers),
+    target_num_walkers(target_num_walkers),
+    context(context),
+    old_walker_state(target_num_walkers, context)
+  {}
+
+  void initialize() {
+    auto old_walker_state_data = old_walker_state.data();
   
-  // Initialize all walker positions to random gaussians of std 1
-  mgpu::transform(
-    [=]MGPU_DEVICE(uint index) {
-      auto randoms = gpu_random::uniforms<walker_dimension>(uint4{index, 0, 0, 0}, uint2{seed, 0});
-      mgpu::iterate<walker_dimension>([&](int dimension_index) {
-          old_walker_state_data[index].pos[dimension_index] = randoms[dimension_index];
-        });
-    }, num_walkers, context);
-    
-  for(uint iter = 0; iter < niters; ++iter) {
-    old_walker_state_data = old_walker_state.data();
+    // Initialize all walker positions to random gaussians of std 1
+    mgpu::transform(
+      [=]MGPU_DEVICE(uint index) {
+        auto randoms = gpu_random::uniforms<system_t::Dimension>(uint4{index, 0, 0, 0}, uint2{seed, 0});
+        mgpu::iterate<system_t::Dimension>([&](int dimension_index) {
+            old_walker_state_data[index].pos[dimension_index] = randoms[dimension_index];
+          });
+      }, num_walkers, context);
+  }
+
+  float step() {
+    auto old_walker_state_data = old_walker_state.data();
     mgpu::mem_t<int> children(num_walkers, context);
     int* children_data = children.data();
     
@@ -79,17 +98,17 @@ int main(int argc, char** argv) {
       [=]MGPU_DEVICE(uint index) {
         auto walker_state = old_walker_state_data[index];          
 
-        auto diffusion_randoms = gpu_random::gaussians<walker_dimension>(uint4{index, iter, 0, 0}, uint2{seed, 1});
+        auto diffusion_randoms = gpu_random::gaussians<system_t::Dimension>(uint4{index, iter, 0, 0}, uint2{seed, 1});
         
         // Energy evaluation: evaluate the Hamiltonian at each walker's
         // position.
-        auto energy_before = helium_hamiltonian(walker_state);
+        auto energy_before = system_t::local_energy(walker_state);
 
         // Diffusion: add a random gaussian of stddev dt to each walker's position
-        mgpu::iterate<walker_dimension>([&](uint dimension_index) {
+        mgpu::iterate<system_t::Dimension>([&](uint dimension_index) {
             walker_state.pos[dimension_index] += sqrt_dt * diffusion_randoms.values[dimension_index];
           });
-        auto energy_after = helium_hamiltonian(walker_state);
+        auto energy_after = 0; //helium_hamiltonian(walker_state);
 
         old_walker_state_data[index] = walker_state;
         // Birth-death I: calculate the number of copies of each walker in the
@@ -147,7 +166,7 @@ int main(int argc, char** argv) {
       mgpu::make_tuple(old_walker_state.data()),
       context
       );
-  
+
     old_walker_state.swap(new_walker_state);
     num_walkers = num_children;
     
@@ -155,6 +174,23 @@ int main(int argc, char** argv) {
       target_energy = energy_estimate;
     else
       target_energy += damping_alpha * (log(target_num_walkers) - log(num_walkers));
+
+    iter++;
+    return energy_estimate;
+  }
+};
+
+int main(int argc, char** argv) {
+  assert(argc == 3);
+  uint niters = atoi(argv[1]);
+  int target_num_walkers = atoi(argv[2]);
+  mgpu::standard_context_t context;
+  
+  DMC<harmonic_oscillator<3>> dd(target_num_walkers, context);
+  dd.initialize();
+    
+  for(uint iter = 0; iter < niters; ++iter) {
+    dd.step();
   }  
   return 0;
 }
