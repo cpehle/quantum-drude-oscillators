@@ -1,1 +1,0 @@
-g++ compute-interactions.cxx -mavx -std=c++11 -O3
