@@ -12,13 +12,20 @@ struct plus_float2_t : public std::binary_function<float2, float2, float2> {
   }
 };
 
+template<int Dimension>
+struct alignas(8) vector_t {
+  float values[Dimension];
+  vector_t<Dimension> & operator +(vector_t<Dimension> const & other) const {
+    vector_t<Dimension> answer;
+    // and the random number generator should also return one of these, so I can add easily
+    mgpu::iterate<Dimension> ...
+  }
+};
+
 template<int Dimension_>
 struct quantum_system_t {
   enum { Dimension = Dimension_};
-
-  struct alignas(8) walker_state_t {
-    float pos[Dimension];
-  };
+  using walker_state_t = vector_t<Dimension>;
 };
 
 template<int Dim>
@@ -29,6 +36,38 @@ struct harmonic_oscillator : quantum_system_t<Dim> {
     for(int ii = 0; ii < Dim; ++ii)
       xx += state.pos[ii]*state.pos[ii];
     return xx/2;
+  }
+};
+
+template<int Dim>
+struct importance_sampled_harmonic_oscillator : quantum_system_t<Dim> {
+  using walker_state_t = typename quantum_system_t<Dim>::walker_state_t;
+
+  importance_sampled_harmonic_oscillator(float alpha) {
+    this->alpha = alpha;
+  }
+
+  but how do I get the piece of state "alpha" into these static functions right here? Perhaps they need not be static?
+
+  MGPU_DEVICE static float local_energy(walker_state_t state) {
+    float xx = 0;
+    float alpha2 = alpha*alpha;
+    float alpha4 = alpha2*alpha2;
+    
+    mgpu::iterate<Dim>([&](uint ii) {
+        xx += state.pos[ii] * state.pos[ii];
+      });
+
+    return (alpha2 + (1 - alpha4)*xx)/2;
+  }
+
+  MGPU_DEVICE static walker_state_t drift_velocity(walker_state_t state) {
+    float alpha2 = alpha*alpha;
+    walker_state_t answer;
+    mgpu::iterate<Dim>([&](uint ii) {
+        answer.pos[ii] = -alpha2 * state.pos[ii];
+      });
+    return answer;
   }
 };
 
@@ -111,9 +150,12 @@ struct DMC {
         // position.
         auto energy_before = system_t::local_energy(walker_state);
 
-        // Diffusion: add a random gaussian of stddev dt to each walker's position
+        auto drift = system_t::drift_velocity(walker_state);
+        // Diffusion: add a random gaussian of stddev dt to each walker's position;
+        // Drift: add dt*drift velocity from guide wavefunction
         mgpu::iterate<system_t::Dimension>([&](uint dimension_index) {
-            walker_state.pos[dimension_index] += sqrt_dt * diffusion_randoms.values[dimension_index];
+            walker_state.pos[dimension_index] += sqrt_dt * diffusion_randoms.values[dimension_index]
+              + dt * drift.pos[dimension_index];
           });
         auto energy_after = system_t::local_energy(walker_state);
 
@@ -193,7 +235,7 @@ int main(int argc, char** argv) {
   int target_num_walkers = atoi(argv[2]);
   mgpu::standard_context_t context;
   
-  DMC<harmonic_oscillator<3>> dd(target_num_walkers, context);
+  DMC<importance_sampled_harmonic_oscillator<3,1>> dd(target_num_walkers, context);
   dd.initialize();
     
   for(uint iter = 0; iter < niters; ++iter) {
