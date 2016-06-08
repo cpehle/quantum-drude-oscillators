@@ -1,17 +1,11 @@
 #include <curand_kernel.h>
 #include <curand_normal.h>
 
+#include "vector.hxx"
+
 namespace gpu_random {
   template<int Arity>
-  struct array_float_t {
-    float values[Arity];
-    MGPU_DEVICE float operator[] (size_t n) const {
-      return values[n];
-    }
-  };
-
-  template<int Arity>
-  MGPU_DEVICE array_float_t<Arity> gaussians(uint4 counter, uint2 key) {
+  MGPU_DEVICE math::vector_t<Arity> gaussians(uint4 counter, uint2 key) {
     enum { n_blocks = (Arity + 4 - 1)/4 };
 
     float scratch[n_blocks * 4];
@@ -30,7 +24,7 @@ namespace gpu_random {
         scratch[ii+3] = lo.y;
       });
 
-    array_float_t<Arity> answer;
+    math::vector_t<Arity> answer;
 
     mgpu::iterate<Arity>([&](uint index) {
         answer.values[index] = scratch[index];
@@ -40,7 +34,7 @@ namespace gpu_random {
   }
 
   template<int Arity>
-  MGPU_DEVICE array_float_t<Arity> uniforms(uint4 counter, uint2 key) {
+  MGPU_DEVICE math::vector_t<Arity> uniforms(uint4 counter, uint2 key) {
     enum { n_blocks = (Arity + 4 - 1)/4 };
 
     float scratch[n_blocks * 4];
@@ -56,7 +50,7 @@ namespace gpu_random {
         scratch[ii+3] = _curand_uniform(result.w);
       });
 
-    array_float_t<Arity> answer;
+    math::vector_t<Arity> answer;
 
     mgpu::iterate<Arity>([&](uint index) {
         answer.values[index] = scratch[index];

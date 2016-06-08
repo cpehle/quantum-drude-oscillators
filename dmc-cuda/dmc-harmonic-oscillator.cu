@@ -12,20 +12,10 @@ struct plus_float2_t : public std::binary_function<float2, float2, float2> {
   }
 };
 
-template<int Dimension>
-struct alignas(8) vector_t {
-  float values[Dimension];
-  vector_t<Dimension> & operator +(vector_t<Dimension> const & other) const {
-    vector_t<Dimension> answer;
-    // and the random number generator should also return one of these, so I can add easily
-    mgpu::iterate<Dimension> ...
-  }
-};
-
 template<int Dimension_>
 struct quantum_system_t {
   enum { Dimension = Dimension_};
-  using walker_state_t = vector_t<Dimension>;
+  using walker_state_t = math::vector_t<Dimension>;
 };
 
 template<int Dim>
@@ -34,7 +24,7 @@ struct harmonic_oscillator : quantum_system_t<Dim> {
   MGPU_DEVICE static float local_energy(walker_state_t state) {
     float xx = 0;
     for(int ii = 0; ii < Dim; ++ii)
-      xx += state.pos[ii]*state.pos[ii];
+      xx += state[ii]*state[ii];
     return xx/2;
   }
 };
@@ -43,11 +33,9 @@ template<int Dim>
 struct importance_sampled_harmonic_oscillator : quantum_system_t<Dim> {
   using walker_state_t = typename quantum_system_t<Dim>::walker_state_t;
 
-  importance_sampled_harmonic_oscillator(float alpha) {
-    this->alpha = alpha;
-  }
-
-  but how do I get the piece of state "alpha" into these static functions right here? Perhaps they need not be static?
+  float alpha=0.95;
+/*  but how do I get the piece of state "alpha" into these static functions right here? Perhaps they need not be static?
+ */
 
   MGPU_DEVICE static float local_energy(walker_state_t state) {
     float xx = 0;
@@ -55,7 +43,7 @@ struct importance_sampled_harmonic_oscillator : quantum_system_t<Dim> {
     float alpha4 = alpha2*alpha2;
     
     mgpu::iterate<Dim>([&](uint ii) {
-        xx += state.pos[ii] * state.pos[ii];
+        xx += state[ii] * state[ii];
       });
 
     return (alpha2 + (1 - alpha4)*xx)/2;
@@ -65,7 +53,7 @@ struct importance_sampled_harmonic_oscillator : quantum_system_t<Dim> {
     float alpha2 = alpha*alpha;
     walker_state_t answer;
     mgpu::iterate<Dim>([&](uint ii) {
-        answer.pos[ii] = -alpha2 * state.pos[ii];
+        answer[ii] = -alpha2 * state[ii];
       });
     return answer;
   }
@@ -79,10 +67,10 @@ struct helium : quantum_system_t<6> {
 
     float r1=0, r2=0, r12=0, tmp;
     for(int ii = 0; ii < 3; ++ii) {
-      r1  += state.pos[ii] * state.pos[ii];
-      r2  += state.pos[ii+3] * state.pos[ii+3];
+      r1  += state[ii] * state[ii];
+      r2  += state[ii+3] * state[ii+3];
 
-      tmp = state.pos[ii+3] - state.pos[ii];
+      tmp = state[ii+3] - state[ii];
       r12 += tmp*tmp;
     }
     r1 = sqrt(r1); r2 = sqrt(r2); r12 = sqrt(r12);
@@ -125,7 +113,7 @@ struct DMC {
       [=]MGPU_DEVICE(uint index) {
         auto randoms = gpu_random::uniforms<system_t::Dimension>(uint4{index, 0, 0, 0}, uint2{seed, 0});
         mgpu::iterate<system_t::Dimension>([&](int dimension_index) {
-            old_walker_state_data[index].pos[dimension_index] = randoms[dimension_index];
+            old_walker_state_data[index][dimension_index] = randoms[dimension_index];
           });
       }, num_walkers, context);
   }
@@ -154,8 +142,8 @@ struct DMC {
         // Diffusion: add a random gaussian of stddev dt to each walker's position;
         // Drift: add dt*drift velocity from guide wavefunction
         mgpu::iterate<system_t::Dimension>([&](uint dimension_index) {
-            walker_state.pos[dimension_index] += sqrt_dt * diffusion_randoms.values[dimension_index]
-              + dt * drift.pos[dimension_index];
+            walker_state[dimension_index] += sqrt_dt * diffusion_randoms.values[dimension_index]
+              + dt * drift[dimension_index];
           });
         auto energy_after = system_t::local_energy(walker_state);
 
@@ -235,7 +223,7 @@ int main(int argc, char** argv) {
   int target_num_walkers = atoi(argv[2]);
   mgpu::standard_context_t context;
   
-  DMC<importance_sampled_harmonic_oscillator<3,1>> dd(target_num_walkers, context);
+  DMC<importance_sampled_harmonic_oscillator<3>> dd(target_num_walkers, context);
   dd.initialize();
     
   for(uint iter = 0; iter < niters; ++iter) {
