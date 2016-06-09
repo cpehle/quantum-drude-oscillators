@@ -17,14 +17,10 @@ struct importance_sampled_harmonic_oscillator : quantum_system_t<Dim,1> {
   using parameter_t = typename quantum_system_t<Dim,1>::parameter_t;
   MGPU_DEVICE static float local_energy(walker_state_t state, parameter_t parameters) {
     float alpha = parameters[0];
-    
-    float xx = 0;
     float alpha2 = alpha*alpha;
     float alpha4 = alpha2*alpha2;
-    
-    mgpu::iterate<Dim>([&](uint ii) {
-        xx += state[ii] * state[ii];
-      });
+
+    float xx = state.norm_squared();
 
     return (alpha2 + (1 - alpha4)*xx)/2;
   }
@@ -33,10 +29,6 @@ struct importance_sampled_harmonic_oscillator : quantum_system_t<Dim,1> {
                                                    parameter_t parameters) {
     float alpha = parameters[0];
     float alpha2 = alpha*alpha;
-    walker_state_t answer;
-    mgpu::iterate<Dim>([&](uint ii) {
-        answer[ii] = -alpha2 * state[ii];
-      });
-    return answer;
+    return -alpha2 * state;
   }
 };

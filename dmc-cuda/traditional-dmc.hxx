@@ -71,10 +71,8 @@ struct TraditionalDMC {
         auto drift = system_t::drift_velocity(walker_state, guide_parameters);
         // Diffusion: add a random gaussian of stddev dt to each walker's position;
         // Drift: add dt*drift velocity from guide wavefunction
-        mgpu::iterate<system_t::walker_dimension>([&](uint dimension_index) {
-            walker_state[dimension_index] += sqrt_dt * diffusion_randoms.values[dimension_index]
-              + dt * drift[dimension_index];
-          });
+        walker_state += sqrt_dt*diffusion_randoms + dt*drift;
+        
         auto energy_after = system_t::local_energy(walker_state, guide_parameters);
 
         old_walker_state_data[index] = walker_state;
