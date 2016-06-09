@@ -11,6 +11,23 @@ namespace math {
       return values[n];
     }
 
+    MGPU_HOST_DEVICE void operator+=(vector_t<Arity,num_t> const & other) {
+
+    }
+
+    MGPU_HOST_DEVICE num_t norm_squared() const {
+      float answer = 0;
+      mgpu::iterate<Arity>([&](uint ii) {
+          answer += values[ii] * values[ii];
+        });
+      return answer;
+    }
+    
+
+//    MGPU_HOST_DEVICE vector_T<Arity, num_t> operator- unary negative operator ?
+
+//    MGPU_HOST_DEVICE vector_T<Arity, num_t> operator* scalar multiplication
+
     MGPU_HOST_DEVICE vector_t<Arity,num_t> & operator +(vector_t<Arity,num_t> const & other) const {
       vector_t<Arity,num_t> answer;
       mgpu::iterate<Arity>([&](uint ii) {
