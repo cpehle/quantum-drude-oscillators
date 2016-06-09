@@ -1,3 +1,5 @@
+#pragma once
+
 #include <moderngpu/meta.hxx>
 
 namespace math {
@@ -5,7 +7,7 @@ namespace math {
   struct alignas(8) vector_t {
     num_t values[Arity];
 
-    MGPU_HOST_DEVICE num_t operator[] (size_t n) const {
+    MGPU_HOST_DEVICE num_t & operator[] (size_t n) {
       return values[n];
     }
 
