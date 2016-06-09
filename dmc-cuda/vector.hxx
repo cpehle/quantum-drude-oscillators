@@ -53,6 +53,10 @@ namespace math {
         });
       return answer;
     }
+
+    MGPU_HOST_DEVICE vector_t<Arity,num_t> operator- (vector_t<Arity,num_t> const & other) const {
+      return *this + (-other);
+    }    
   };
 
   template<int Arity, typename num_t=float>

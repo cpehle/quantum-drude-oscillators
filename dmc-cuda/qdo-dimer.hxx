@@ -5,25 +5,30 @@ struct qdo_atom_dimer : quantum_system_t<6, 1> {
   using parameter_t = typename quantum_system_t<6, 1>::parameter_t;
   
   MGPU_DEVICE static float local_energy(walker_state_t state, parameter_t parameters) {
-    float r1=0, r2=0, r12=0, tmp;
-    for(int ii = 0; ii < 3; ++ii) {
-      r1  += state[ii] * state[ii];
-      r2  += state[ii+3] * state[ii+3];
+    // Distance between two nuclei
+    float r12 = parameters[0];
 
-      tmp = state[ii+3] - state[ii] + r_centres;
-      r12 += tmp*tmp;
-    }
+    // Displacement between the two nuclei
+    math::vector_t<3> displacement_12{r12, 0, 0};
 
-    r12 = sqrt(r12);
+    // The two drudes in their local frames
+    math::vector_t<3> drude1{state[0], state[1], state[2]};
+    math::vector_t<3> drude2{state[3], state[4], state[5]};
 
-    float energy = r1/2 + r2/2 + 1/r12;
-    energy += 1/(distance between drude1 and centre2);
-    energy += 1/(distance between drude2 and centre1);
+    // Distance between the two drudes
+    float r_d1d2 = sqrt((drude1 - drude2 + displacement_12).norm_squared());
 
+    // Harmonic oscillator energies: x^2/2
+    float energy = drude1.norm_squared()/2 + drude2.norm_squared()/2;
+
+    // Interaction energy: erf(r)/r, which is a regularized version of 1/r
+    energy += erf(r_d1d2)/r_d1d2;
+    
     return energy;
   }
 
-  MGPU_DEVICE static float drift_velocity(walker_state_t state,
-                                          parameter_t parameters) {
-    return zero;
+  MGPU_DEVICE static walker_state_t drift_velocity(walker_state_t state,
+                                                   parameter_t parameters) {
+    return state * 0.0;
   }
+};
