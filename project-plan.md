@@ -101,4 +101,7 @@ high-level quantum data.
 
 ...
 
+-- Implement on-site trial wavefunctions for neutral atom dimer
+-- Compare to analytic results for neutral atom dimer
+
 [1] http://www.physics.buffalo.edu/phy411-506-2008/chapter10/ch10-lec6.pdf​
