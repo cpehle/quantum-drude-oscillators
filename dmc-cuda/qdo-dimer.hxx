@@ -32,6 +32,10 @@ struct qdo_atom_dimer : quantum_system_t<6, 1> {
     // regularized version of 1/r. Positive because it is repulsive.
     energy += 1.0/r_d1d2;
 
+    // Nucleus-nucleus interaction energy. A constant but
+    // r12-dependent contribution.
+    energy += 1.0/sqrt(displacement_12.norm_squared());
+
     // Drude1 - nucleus2 interaction energy: negative because it's attractive
     energy -= 1.0/r_d1n2;
 
