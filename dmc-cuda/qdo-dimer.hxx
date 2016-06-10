@@ -8,6 +8,8 @@ struct qdo_atom_dimer : quantum_system_t<6, 1> {
     // Distance between two nuclei
     float r12 = parameters[0];
 
+    float q = 1.0;
+
     // Displacement between the two nuclei: vector from drude1 to drude2
     math::vector_t<3> displacement_12{r12, 0, 0};
 
@@ -26,27 +28,28 @@ struct qdo_atom_dimer : quantum_system_t<6, 1> {
 
     // Harmonic oscillator energies: x^2/2 for each drude in its local
     // frame
-    float energy = drude1.norm_squared()/2 + drude2.norm_squared()/2;
+    // float energy = drude1.norm_squared()/2 + drude2.norm_squared()/2;
+    float energy = 3.0;
 
     // Drude-drude interaction energy: erf(r)/r, which is a
     // regularized version of 1/r. Positive because it is repulsive.
-    energy += 1.0/r_d1d2;
+    energy += q*q/r_d1d2;
 
     // Nucleus-nucleus interaction energy. A constant but
     // r12-dependent contribution.
-    energy += 1.0/sqrt(displacement_12.norm_squared());
+    energy += q*q/sqrt(displacement_12.norm_squared());
 
     // Drude1 - nucleus2 interaction energy: negative because it's attractive
-    energy -= 1.0/r_d1n2;
+    energy -= q*q/r_d1n2;
 
     // Drude2 - nucleus1 interaction energy
-    energy -= 1.0/r_d2n1;
+    energy -= q*q/r_d2n1;
     
     return energy;
   }
 
   MGPU_DEVICE static walker_state_t drift_velocity(walker_state_t state,
                                                    parameter_t parameters) {
-    return state * 0.0;
+    return -state;
   }
 };
