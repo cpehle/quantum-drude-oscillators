@@ -102,7 +102,7 @@ struct TraditionalDMC {
     assert(energy_estimate_host.x != 0);
     
     float energy_estimate = energy_estimate_host.y / energy_estimate_host.x;
-    printf("%f %d %f\n", energy_estimate, num_walkers, target_energy);    
+//    printf("%f %d %f\n", energy_estimate, num_walkers, target_energy);    
     assert(!std::isnan(energy_estimate));
     assert(std::isfinite(energy_estimate));
     
