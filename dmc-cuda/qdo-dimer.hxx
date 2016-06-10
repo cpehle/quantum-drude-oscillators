@@ -30,13 +30,13 @@ struct qdo_atom_dimer : quantum_system_t<6, 1> {
 
     // Drude-drude interaction energy: erf(r)/r, which is a
     // regularized version of 1/r. Positive because it is repulsive.
-    energy += erf(r_d1d2)/r_d1d2;
+    energy += 1.0/r_d1d2;
 
     // Drude1 - nucleus2 interaction energy: negative because it's attractive
-    energy -= erf(r_d1n2)/r_d1n2;
+    energy -= 1.0/r_d1n2;
 
     // Drude2 - nucleus1 interaction energy
-    energy -= erf(r_d2n1)/r_d2n1;
+    energy -= 1.0/r_d2n1;
     
     return energy;
   }

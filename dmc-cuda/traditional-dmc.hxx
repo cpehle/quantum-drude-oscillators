@@ -13,7 +13,7 @@ struct TraditionalDMC {
   mgpu::mem_t<walker_state_t> old_walker_state;
   mgpu::context_t & context;
   uint seed = 10;
-  float dt = 0.005;
+  float dt = 0.01;
   float damping_alpha = 0.1;
   float sqrt_dt = sqrt(dt);
   uint num_walkers;

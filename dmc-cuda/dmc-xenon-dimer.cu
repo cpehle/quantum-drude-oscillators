@@ -10,7 +10,7 @@ int main(int argc, char** argv) {
   int target_num_walkers = atoi(argv[2]);
   float radial_distance = std::atof(argv[3]);
   
-  mgpu::standard_context_t context;
+  mgpu::standard_context_t context(false);
 
   using system = qdo_atom_dimer;
   
