@@ -54,7 +54,7 @@ struct TraditionalDMC {
     auto local_iter = this->iter, seed = this->seed;
     auto sqrt_dt = this->sqrt_dt, dt = this->dt, local_target_energy = this->target_energy;
     
-    mgpu::mem_t<float2> energy_estimate_device(1, context);
+    mgpu::mem_t<math::vector_t<2>> energy_estimate_device(1, context);
     
     mgpu::transform_reduce(
       [=]MGPU_DEVICE(uint index) {
@@ -87,25 +87,27 @@ struct TraditionalDMC {
 
         children_data[index] = int(branching_factor + branching_random);
 
-        return float2{branching_factor, branching_factor * energy_after};
+        return math::vector_t<2>{branching_factor, branching_factor * energy_after};
         
       }, num_walkers,
       energy_estimate_device.data(),
-      plus_float2_t(),
+      mgpu::plus_t<math::vector_t<2>>(),
       context);
 
-    float2 energy_estimate_host = mgpu::from_mem(energy_estimate_device)[0];
-    assert(!std::isnan(energy_estimate_host.x));
-    assert(std::isfinite(energy_estimate_host.x));
-    assert(!std::isnan(energy_estimate_host.y));
-    assert(std::isfinite(energy_estimate_host.y));
-    assert(energy_estimate_host.x != 0);
+    auto energy_estimate_host = mgpu::from_mem(energy_estimate_device)[0];
+    auto total_weight = energy_estimate_host[0];
+    auto weighted_local_energy = energy_estimate_host[1];
     
-    float energy_estimate = energy_estimate_host.y / energy_estimate_host.x;
+    assert(!std::isnan(total_weight));
+    assert(std::isfinite(total_weight));
+    assert(!std::isnan(weighted_local_energy));
+    assert(std::isfinite(weighted_local_energy));
+    assert(total_weight != 0);
+    
+    auto energy_estimate = weighted_local_energy / total_weight;
 //    printf("%f %d %f\n", energy_estimate, num_walkers, target_energy);    
     assert(!std::isnan(energy_estimate));
     assert(std::isfinite(energy_estimate));
-    
 
     // Birth-death II: compute a prefix-sum of the number-of-copies for
     // each walker

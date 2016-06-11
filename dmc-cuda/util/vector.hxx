@@ -65,16 +65,3 @@ namespace math {
     return vec * scalar;
   }
 }
-    
-struct plus_float2_t : public std::binary_function<float2, float2, float2> {
-  MGPU_HOST_DEVICE float2 operator()(float2 a, float2 b) const {
-    return float2{a.x + b.x, a.y + b.y};
-  }
-};
-
-struct plus_double2_t : public std::binary_function<double2, double2, double2> {
-  MGPU_HOST_DEVICE double2 operator()(double2 a, double2 b) const {
-    return double2{a.x + b.x, a.y + b.y};
-  }
-};
-

@@ -5,16 +5,12 @@
 #include <moderngpu/kernel_reduce.hxx>
 #include <moderngpu/kernel_scan.hxx>
 
-#include "random-numbers.hxx"
+#include <util/random-numbers.hxx>
 
-//#include "harmonic-oscillator.hxx"
-//#include "helium.hxx"
-#include "qdo-dimer.hxx"
+#include <hamiltonians/qdo-diatom.hxx>
 
-using num_t = double;
+using num_t = float;
 
-//using system_t = importance_sampled_harmonic_oscillator<3>;
-//using system_t = helium;
 using system_t = qdo_atom_dimer;
 using walker_state_t = typename system_t::walker_state_t;
 using parameter_t = typename system_t::parameter_t;
@@ -53,7 +49,7 @@ int main(int argc, char **argv) {
   
   for (uint local_iter = 0; local_iter < niters; ++local_iter) {
     old_walker_state_data = old_walker_state.data();
-    mgpu::mem_t<double2> energy_estimate_device(1, context);
+    mgpu::mem_t<math::vector_t<2,num_t>> energy_estimate_device(1, context);
   
     /* Perform diffusion and compute the weight for every walker. */
     auto weights_data = weights.data();
@@ -80,37 +76,39 @@ int main(int argc, char **argv) {
 
         old_walker_state_data[index] = walker_state;
         
-        double weight = exp(-dt * (0.5*(energy_before + energy_after)));
+        num_t weight = exp(-dt * (0.5*(energy_before + energy_after)));
         weights_data[index] = weight;
-        return double2{weight, weight * energy_after};
+        return math::vector_t<2,num_t>{weight, weight * energy_after};
       },
       num_walkers,
       energy_estimate_device.data(),
-      plus_double2_t(),
+      mgpu::plus_t<math::vector_t<2,num_t>>(),
       context);
-    double2 energy_estimate_host = mgpu::from_mem(energy_estimate_device)[0];
-    assert(!std::isnan(energy_estimate_host.x));
-    assert(std::isfinite(energy_estimate_host.x));
-    assert(!std::isnan(energy_estimate_host.y));
-    assert(std::isfinite(energy_estimate_host.y));
-    assert(energy_estimate_host.x != 0);
+
+    auto energy_estimate_host = mgpu::from_mem(energy_estimate_device)[0];
+    auto total_weight = energy_estimate_host[0];
+    auto weighted_local_energy = energy_estimate_host[1];
     
-    double energy_estimate = energy_estimate_host.y / energy_estimate_host.x;
+    assert(!std::isnan(total_weight));
+    assert(std::isfinite(total_weight));
+    assert(!std::isnan(weighted_local_energy));
+    assert(std::isfinite(weighted_local_energy));
+    assert(total_weight != 0);
+    
+    auto energy_estimate = weighted_local_energy / total_weight;
     //printf("%f %d\n", energy_estimate, num_walkers);    
     assert(!std::isnan(energy_estimate));
     assert(std::isfinite(energy_estimate));
 
-    double total_weight_host = energy_estimate_host.x;
-
     /* Compute the prefix-sum for weights. */
-    mgpu::mem_t<double> should_be_one(1, context);
-    mgpu::transform_scan<double,mgpu::scan_type_t::scan_type_inc>(
+    mgpu::mem_t<num_t> should_be_one(1, context);
+    mgpu::transform_scan<num_t,mgpu::scan_type_t::scan_type_inc>(
       [=]MGPU_DEVICE(uint index) {
-        return weights_data[index]/total_weight_host;
+        return weights_data[index]/total_weight;
       },
       num_walkers,
       weights_prefix_sum.data(),
-      mgpu::plus_t<double>(),
+      mgpu::plus_t<num_t>(),
       should_be_one.data(),
       context);
 
