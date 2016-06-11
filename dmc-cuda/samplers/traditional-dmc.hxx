@@ -3,7 +3,7 @@
 #include <moderngpu/kernel_load_balance.hxx>
 #include <moderngpu/kernel_reduce.hxx>
 
-#include "random-numbers.hxx"
+#include <util/random-numbers.hxx>
 
 template<typename system_t>
 struct TraditionalDMC {

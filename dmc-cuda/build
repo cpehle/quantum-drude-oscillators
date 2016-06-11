@@ -1,1 +1,1 @@
-nvcc -gencode arch=compute_52,code=sm_52 -std=c++11 -I ../libs/moderngpu/src --expt-extended-lambda -Xptxas=-v -lineinfo dmc-harmonic-oscillator.cu -o run-dmc
+nvcc -gencode arch=compute_52,code=sm_52 -std=c++11 -I ../libs/moderngpu/src -I . --expt-extended-lambda -Xptxas=-v -lineinfo apps/qdo-diatom.cu -o qdo-diatom
