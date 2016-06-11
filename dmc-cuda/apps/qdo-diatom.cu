@@ -1,9 +1,11 @@
 // -*- c++ -*-
 #include <samplers/traditional-dmc.hxx>
+#include <samplers/resampling-dmc.hxx>
+
 #include <hamiltonians/qdo-diatom.hxx>
 
 int main(int argc, char** argv) {
-  uint thermalization_iters = 500;
+  uint thermalization_iters = 1000;
 
   assert(argc == 4);
   uint niters = atoi(argv[1]);
@@ -13,8 +15,10 @@ int main(int argc, char** argv) {
   mgpu::standard_context_t context(false);
 
   using system = qdo_atom_dimer;
-  
-  TraditionalDMC<system> dd(target_num_walkers, context);
+
+  using Sampler = TraditionalDMC<system>;
+
+  Sampler dd(target_num_walkers, context);
   dd.initialize();
 
   for(uint iter = 0; iter < thermalization_iters; ++iter)
@@ -30,6 +34,6 @@ int main(int argc, char** argv) {
   double energy_mean = total_energy/niters;
   double energy_variance = total_squared_energy/niters - energy_mean*energy_mean;
   
-  printf("%f %f\n", energy_mean, energy_variance);  
+  printf("%.16f %.16f\n", energy_mean, energy_variance);
   return 0;
 }

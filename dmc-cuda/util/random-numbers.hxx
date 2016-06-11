@@ -1,3 +1,5 @@
+#pragma once
+
 #include <curand_kernel.h>
 #include <curand_normal.h>
 
