@@ -11,6 +11,8 @@
 //#include "helium.hxx"
 #include "qdo-dimer.hxx"
 
+using num_t = double;
+
 //using system_t = importance_sampled_harmonic_oscillator<3>;
 //using system_t = helium;
 using system_t = qdo_atom_dimer;
