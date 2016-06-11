@@ -1,14 +1,15 @@
 #include "quantum-system.hxx"
 
-struct qdo_atom_dimer : quantum_system_t<6, 1> {
-  using walker_state_t = typename quantum_system_t<6, 1>::walker_state_t;
-  using parameter_t = typename quantum_system_t<6, 1>::parameter_t;
+struct qdo_atom_dimer : quantum_system_t<6, 2> {
+  using walker_state_t = typename quantum_system_t<6, 2>::walker_state_t;
+  using parameter_t = typename quantum_system_t<6, 2>::parameter_t;
   
   MGPU_DEVICE static float local_energy(walker_state_t state, parameter_t parameters) {
     // Distance between two nuclei
     float r12 = parameters[0];
 
-    float q = 1.0;
+    // Magnitude of charge on each drude and nucleus
+    float q = parameters[1];
 
     // Displacement between the two nuclei: vector from drude1 to drude2
     math::vector_t<3> displacement_12{r12, 0, 0};

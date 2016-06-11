@@ -7,10 +7,11 @@
 int main(int argc, char** argv) {
   uint thermalization_iters = 1000;
 
-  assert(argc == 4);
+  assert(argc == 5);
   uint niters = atoi(argv[1]);
   int target_num_walkers = atoi(argv[2]);
   float radial_distance = std::atof(argv[3]);
+  float charge = std::atof(argv[4]);
   
   mgpu::standard_context_t context(false);
 
@@ -22,11 +23,11 @@ int main(int argc, char** argv) {
   dd.initialize();
 
   for(uint iter = 0; iter < thermalization_iters; ++iter)
-    dd.step(system::parameter_t{radial_distance});
+    dd.step(system::parameter_t{radial_distance, charge});
 
   double total_energy = 0.0, total_squared_energy = 0.0;
   for(uint iter = 0; iter < niters; ++iter) {
-    float energy = dd.step(system::parameter_t{radial_distance});
+    float energy = dd.step(system::parameter_t{radial_distance, charge});
     total_energy += energy;
     total_squared_energy += energy*energy;
   }
