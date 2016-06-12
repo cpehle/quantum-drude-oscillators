@@ -1,6 +1,6 @@
 // -*- c++ -*-
-#include "traditional-dmc.hxx"
-#include "qdo-dimer.hxx"
+#include <samplers/traditional-dmc.hxx>
+#include <hamiltonians/qdo-diatom.hxx>
 
 int main(int argc, char** argv) {
   uint thermalization_iters = 500;

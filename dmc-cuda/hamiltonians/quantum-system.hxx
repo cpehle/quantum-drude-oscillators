@@ -1,4 +1,4 @@
-#include "vector.hxx"
+#include <util/vector.hxx>
 
 template<int walker_dimension_, int parameter_dimension_>
 struct quantum_system_t {
