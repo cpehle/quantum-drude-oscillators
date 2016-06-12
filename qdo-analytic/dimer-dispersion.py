@@ -27,6 +27,22 @@ def C10(q, mu, omega, hbar=1.0):
     c6 = C6(q, mu, omega, hbar)
     return (245./8) * (hbar/(mu*omega))**2 * c6
 
+def dimer_dispersion(distances, q, mu, omega, terms=3, hbar=1.0):
+    c6  = C6(q, mu, omega)
+    c8  = C8(q, mu, omega, hbar)
+    c10 = C10(q, mu, omega, hbar)
+    answer = 2*monomer(omega, hbar)
+
+    if terms >= 1:
+        answer -= c6/xs**6
+    if terms >= 2:
+        answer -= c8/xs**8
+    if terms >= 3:
+        answer -= c10/xs**10
+
+    return answer
+    
+
 if __name__ == "__main__":
     import argparse, subprocess, sys
     parser = argparse.ArgumentParser(description='Generate analytic QDO radial scan')
@@ -37,17 +53,13 @@ if __name__ == "__main__":
     parser.add_argument('--lower', type=float, default=2.0, help='')
     parser.add_argument('--upper', type=float, default=10.0, help='')
     parser.add_argument('--nconfigs', type=int, default=100, help='')
+    parser.add_argument('--terms', type=int, default=3, help='1, 2, or 3 terms in the series')
 
     args = parser.parse_args()
 
-    c6  = C6(args.q, args.mu, args.omega)
-    c8  = C8(args.q, args.mu, args.omega, args.hbar)
-    c10 = C10(args.q, args.mu, args.omega, args.hbar)
-
     xs = np.linspace(args.lower, args.upper, args.nconfigs)
-
+    answer = dimer_dispersion(xs, args.q, args.mu, args.omega, args.terms, args.hbar)
     np.set_printoptions(precision=16)
-    answer = 2*monomer(args.omega, args.hbar) - c6/xs**6 - c8/xs**8 - c10/xs**10
-
+    
     for r, e_r in zip(xs, answer):
         print r, e_r

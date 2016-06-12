@@ -5,7 +5,7 @@
 #include <hamiltonians/qdo-diatom.hxx>
 
 int main(int argc, char** argv) {
-  uint thermalization_iters = 1000;
+  uint thermalization_iters = 5000;
 
   assert(argc == 5);
   uint niters = atoi(argv[1]);
