@@ -11,13 +11,14 @@ if __name__ == "__main__":
     parser.add_argument('--nwalkers', type=int, default=100000, help='')
     parser.add_argument('--niters', type=int, default=40000, help='')
     parser.add_argument('--nconfigs', type=int, default=10, help='')
+    parser.add_argument('--app', type=str, default="./qdo-diatom", help='')    
 
     args = parser.parse_args()
 
     for distance in np.linspace(args.lower, args.upper, args.nconfigs):
         print distance,"",
         sys.stdout.flush()        
-        subprocess.check_call(["./qdo-diatom", str(args.niters), str(args.nwalkers),
+        subprocess.check_call([args.app, str(args.niters), str(args.nwalkers),
                                str(distance), str(args.charge)])
         sys.stdout.flush()
         
